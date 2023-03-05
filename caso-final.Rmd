@@ -1,0 +1,171 @@
+---
+title: "Wine Quality"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Caso Final Módulo Estadística - Wine Quality
+
+## Dataset
+
+<https://archive.ics.uci.edu/ml/datasets/wine+quality>
+
+### Descripción del Dataset
+
+Esta base de datos, consta de dos conjuntos de datos relacionados con variantes rojas y blancas del vino portugués "Vinho Verde".
+
+### Variables del Dataset
+
+**Variables de entrada**:\
+\* fixed acidity: cuantitativa.\
+\* volatile acidity: cuantitativa.\
+\* citric acid: cuantitativa.\
+\* residual sugar: cuantitativa.\
+\* chlorides: cuantitativa.\
+\* free sulfur dioxide: cuantitativa.\
+\* total sulfur dioxide: cuantitativa.\
+\* density: cuantitativa.\
+\* pH: cuantitativa.\
+\* sulphates: cuantitativa.\
+\* alcohol: cuantitativa.\
+
+**Variable de salida**:\
+\* quality (score between 0 and 10): cualitativa.
+
+## Objetivo del caso práctico
+
+Realizar un modelo de regresión lineal que permita representar la calidad (quality) del vino a través de las demás variables. Teniendo en cuenta cuáles de estas son más significativas.
+
+## Solución del caso práctico
+
+### Importar librerías
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(corrplot)
+library(janitor)
+```
+
+### Lectura del dataset
+
+Se leen los dos archivos correspondientes a vinos rojos y vinos blancos, para proceder a unirlos en un único dataframe que contenga todos los datos. Esto con el fin de tener más valores. Se utiliza también el método ***clean_names()*** para mejorar el nombre de las columnas del dataset.
+
+```{r}
+wine_quality <- read_delim('https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv', delim = ';') %>%
+  bind_rows(read_delim('https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv', delim = ';')) %>%
+  clean_names()
+```
+
+Se crea un dataframe con el mismo contenido anterior, pero transformando la calidad del vino a tipo factor.
+
+```{r}
+wine_quality_factor <- mutate(wine_quality, quality = factor(quality, ordered = TRUE))
+```
+
+### Análisis exploratorio
+
+Primero se procede a generar una vista previa del dataset, utilizando el comando ***glimpse***, que permite conocer la cantidad de columnas, filas, y el tipo de dato de cada una.
+
+```{r}
+glimpse(wine_quality)
+```
+
+Como se observa con el comando anterior, todos los datos son de tipo double. Por esto, conviene ejecutar el comando ***summary***, para así obtener un resumen estadístico del conjunto de datos.
+
+```{r}
+summary(wine_quality_factor)
+```
+
+Para conocer el comportamiento de las variables numéricas y su relación, se grafica una matriz de correlación:
+
+```{r fig.height=5, fig.width=5}
+corrplot(cor(wine_quality), method = 'square', type = 'lower', diag = FALSE, addCoef.col = 'black')
+```
+
+A través de la gráfica anterior podemos notar que:
+
+-   Las variables con mayor correlación son total_sulfur_dioxide y free_sulfur_dioxide, siendo esta correlación postivia. Esto tiene sentido porque la cantidad total de dióxido de sulfuro va a estar relacionada con que el vino tenga o no este componente.
+
+-   Las variables alcohol y density tienen una fuerte correlación negativa, lo cual significa que si una disminuye, la otra también.
+
+-   Podemos observar una correlación positiva fuerte de la variable residual_sugar con las variables free_sulfur_dioxide, total_sulfur_dioxide y density. Así también, entre la variable fixed_acidity y density.
+
+-   Existen otras variables con alta correlación (tanto positiva, como negativa), en general las variables se encuentran correlacionadas entre sí en su mayoría.
+
+Para ver el comportamiento de las variables de forma gráfica entre sí, podemos crear una gráfica con ***ggpairs***. Este método nos permitirá graficar cada variable con las demás para cuestiones de análisis.
+
+```{r fig.height=22, fig.width=10, message=FALSE, warning=FALSE}
+ggpairs(wine_quality_factor, upper = list(continuous = 'box_no_facet'))
+```
+
+A través de las visualizaciones obtenidas anteriormente, podemos sacar algunas conclusiones:
+
+-   Las gráficas de densidad nos muestran que realmente no todas las variables siguen una distribución normal. Las que más se aproximan a una son: fixed_acidity, p_h, y quality.
+
+-   En términos generales, la calidad del vino es media. No existen vinos con calidades menores a 3, ni vinos con calidad perfecta de 10. Los valores se centran más que todo en calidades como 5, 6 y 7.
+
+-   El dataset contiene muchos valores que se podrían considerar outliers. Esto podría ser un factor que altere el modelo.
+
+-   No todas las variables se comportan de forma lineal. Las que poseen una mayor linealidad son: alcohol, p_h y total_sulfur_dioxide.
+
+Se podría decir que el conjunto de datos es irregular, y que, aunque se vaya a realizar una regresión lineal, este modelo no podrá explicar realmente los datos. Por lo que muy probablemente el R2 sea bajo.
+
+### Regresión Lineal
+
+Se iniciará creando un modelo que utilice todas las variables del dataset para calcular la calidad del vino (quality), para así analizar si es posible mejorar el modelo.
+
+```{r}
+model <- lm(quality ~ ., data = wine_quality)
+summary(model)
+```
+
+Se puede observar que el R2 es bastante bajo, indicando que el modelo sólo explica aproximadamente un 29% de los datos. También, se puede observar que todas las variables se consideran significativas dentro del modelo, excepto citric_acid y chlorides.
+
+Se procede a graficar el resultado de la regresión lineal.
+
+```{r}
+plot(model)
+```
+
+A partir de los gráficos anteriores se puede decir:
+
+-   **Residuals vs Fitted (Residuos vs Valores Ajustados):** lo ideal sería poder visualizar puntos aleatorios a ambos lados del cero sin detectar un patrón. En este caso podemos ver patrones de líneas en los datos, por lo que se puede decir que el modelo calculados no es realmente apropiado para este conjunto de datos.
+
+-   **Normal QQ (Normalidad de los residuos):** idealmente, los residuos se deben distribuir aproximadamente alrededor de la línea de referencia sin patrones notables, esto sugiere que el modelo se ajusta adecuadamente a los datos y que los residuos siguen una distribución normal. En este caso se observan colas largas los extremos, esto indica que el modelo no es adecuado y que se necesitan ajustes.
+
+-   **Scale - Location (Escala - Ubicación):** La gráfica de escala-ubicación (scale-location) muestra si la varianza de los residuos es constante en diferentes niveles de la variable predictora. En la gráfica, si la varianza de los residuos es constante, los puntos deben estar distribuidos de manera uniforme alrededor de una línea horizontal. En este caso podemos observar patrones en los puntos, y la línea que representa la homocedasticidad, no es totalmente horizontal, lo que indica que la varianza de los errores no es constante a través de los datos. Es importante que exista homocedasticidad en los datos para que la regresión lineal tenga sentido, por eso se puede decir que el modelo no es adecuado.
+
+-   **Residuals vs Leverage (Residuales vs Influencia):** los puntos que se encuentran en la parte superior derecha o inferior derecha de la gráfica pueden ser puntos influyentes o atípicos (fuera de la línea de distancia de Cook). En general, la mayoría de los puntos caen dentro de la línea de distancia de Cook. Sin embargo, hay puntos que están muy alejados de los demás, por esto se deberían investigar para determinar si son valores atípicos o si realmente tiene que ver con el modelo.
+
+Es decir, a partir de las gráficas anteriores y sus conclusiones, podemos afirmar que el modelo no es bueno para explicar los datos.
+
+Se podrían eliminar del modelo aquellas variables no significativas para ver cómo influyen en el modelo:
+
+```{r}
+wine_quality_sig <- select(wine_quality, !c(chlorides, citric_acid))
+model_sig <- lm(quality ~ ., data = wine_quality_sig)
+summary(model_sig)
+```
+
+Luego de realizar este nuevo modelo, podemos ver que el R2 realmente no cambia mucho. Incluso disminuye ligeramente. Por lo que, a pesar de todo, el modelo anterior sigue siendo algo mejor a comparación de este.
+
+Se procede a utilizar el método ***step*** que usa el criterio de información de Akaike (AIC) para evaluar y comparar modelos de regresión con diferentes combinaciones de variables. De esta forma se intentará mejorar el modelo, tomando aquel con el AIC más bajo.
+
+```{r}
+model_step <- step(model, direction = 'backward')
+summary(model_step)
+```
+
+Por ende, la regresión lineal final sería:
+
+```{r}
+summary(lm(model_step))
+```
+
+Como se puede observar el modelo realmente no cambia mucho, y eliminar variables al modelo original no aumenta el R2. Por lo que se podría decir que el mejor modelo para regresión lineal contiene todas las variables del dataset.
+
+## Conclusión
+
+Aunque se ha obtenido una regresión lineal correcta, se puede decir que esta no explica el modelo realmente, ya que sólo lo hacce para el 29% de los datos. Esto puede deberse a diferentes factores como la normalidad o linealidad de los datos. Por lo que se recomendaría analizar estos datos a partir de otros modelos que se adapten mejor a estos.
